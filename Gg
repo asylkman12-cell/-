@@ -1,0 +1,279 @@
+-- N60 Hybrid System - شفاف + سرعة + نقل أشخاص + نط عالي
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
+local Players = game:GetService("Players")
+
+-- إعدادات النظام
+local screenShakeEnabled = false
+local screenRotateEnabled = false
+local teleportEnabled = false
+local selectedPlayer = nil
+
+-- إعدادات السرعة والنط
+local speedSettings = {
+    walkSpeed = 16,
+    jumpPower = 50,
+    currentJumpPower = 50,
+    gravity = 196.2,
+    currentMultiplier = 1.0,
+    maxMultiplier = 10.0,
+    jumpMultiplier = 1.0,
+    maxJumpMultiplier = 10.0
+}
+
+local speedLevels = {
+    {name = "🐌 بطيء", multiplier = 0.5, jumpMultiplier = 0.5, color = Color3.fromRGB(100, 100, 255)},
+    {name = "🚶 عادي", multiplier = 1.0, jumpMultiplier = 1.0, color = Color3.fromRGB(0, 150, 255)},
+    {name = "🏃 سريع", multiplier = 2.0, jumpMultiplier = 2.0, color = Color3.fromRGB(255, 200, 0)},
+    {name = "⚡ سريع جداً", multiplier = 4.0, jumpMultiplier = 3.0, color = Color3.fromRGB(255, 100, 50)},
+    {name = "🚀 تيربو", multiplier = 6.0, jumpMultiplier = 4.0, color = Color3.fromRGB(255, 50, 100)},
+    {name = "🌪️ هايبر", multiplier = 8.0, jumpMultiplier = 5.0, color = Color3.fromRGB(200, 0, 255)}
+}
+
+local jumpLevels = {
+    {name = "🐇 قفزة عادية", multiplier = 2.0, color = Color3.fromRGB(100, 200, 100)},
+    {name = "🦘 قفزة عالية", multiplier = 4.0, color = Color3.fromRGB(100, 255, 100)},
+    {name = "🦸 قفزة خارقة", multiplier = 6.0, color = Color3.fromRGB(255, 255, 100)},
+    {name = "🚀 قفزة صاروخية", multiplier = 8.0, color = Color3.fromRGB(255, 150, 50)},
+    {name = "🪂 قفزة طائرة", multiplier = 10.0, color = Color3.fromRGB(255, 100, 100)},
+    {name = "🌙 قفزة فضائية", multiplier = 15.0, color = Color3.fromRGB(200, 100, 255)}
+}
+
+local currentSpeedIndex = 2
+local currentJumpIndex = 1
+local speedBoostEnabled = false
+local jumpBoostEnabled = false
+local flyModeEnabled = false
+local superJumpEnabled = false
+local infiniteJumpEnabled = false
+local bodyVelocity
+
+-- إنشاء واجهة شفافة
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "N60_HYBRID_PLUS"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+-- زر التحكم الرئيسي الشفاف
+local mainButton = Instance.new("TextButton")
+mainButton.Name = "MainButton"
+mainButton.Size = UDim2.new(0, 70, 0, 70)
+mainButton.Position = UDim2.new(0, 10, 0, 10)
+mainButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+mainButton.BackgroundTransparency = 0.7
+mainButton.Text = "🔵"
+mainButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainButton.Font = Enum.Font.GothamBlack
+mainButton.TextSize = 32
+mainButton.AutoButtonColor = false
+mainButton.ZIndex = 10
+mainButton.Parent = screenGui
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(1, 0)
+buttonCorner.Parent = mainButton
+
+-- لوحة التحكم الشفافة
+local controlPanel = Instance.new("Frame")
+controlPanel.Name = "ControlPanel"
+controlPanel.Size = UDim2.new(0, 400, 0, 600)
+controlPanel.Position = UDim2.new(0.5, -200, 0.5, -300)
+controlPanel.BackgroundColor3 = Color3.fromRGB(20, 40, 80)
+controlPanel.BackgroundTransparency = 0.85
+controlPanel.Visible = false
+controlPanel.ZIndex = 5
+controlPanel.Parent = screenGui
+
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0.05, 0)
+panelCorner.Parent = controlPanel
+
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Color = Color3.fromRGB(100, 150, 255)
+panelStroke.Thickness = 2
+panelStroke.Transparency = 0.6
+panelStroke.Parent = controlPanel
+
+-- شريط العنوان الشفاف
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 50)
+titleBar.BackgroundColor3 = Color3.fromRGB(30, 60, 120)
+titleBar.BackgroundTransparency = 0.8
+titleBar.ZIndex = 6
+titleBar.Parent = controlPanel
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+titleLabel.Position = UDim2.new(0.15, 0, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "⚡ N60 SUPER JUMP"
+titleLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 18
+titleLabel.ZIndex = 7
+titleLabel.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 40, 0, 40)
+closeButton.Position = UDim2.new(1, -45, 0.5, -20)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+closeButton.BackgroundTransparency = 0.7
+closeButton.Text = "✕"
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 20
+closeButton.ZIndex = 7
+closeButton.Parent = titleBar
+
+-- تبويبات التحكم
+local tabsFrame = Instance.new("Frame")
+tabsFrame.Size = UDim2.new(0.9, 0, 0, 40)
+tabsFrame.Position = UDim2.new(0.05, 0, 0, 60)
+tabsFrame.BackgroundTransparency = 1
+tabsFrame.ZIndex = 6
+tabsFrame.Parent = controlPanel
+
+local teleportTab = Instance.new("TextButton")
+teleportTab.Size = UDim2.new(0.24, 0, 1, 0)
+teleportTab.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+teleportTab.BackgroundTransparency = 0.7
+teleportTab.Text = "🚀 النقل"
+teleportTab.Font = Enum.Font.GothamBold
+teleportTab.TextSize = 14
+teleportTab.ZIndex = 7
+teleportTab.Parent = tabsFrame
+
+local speedTab = Instance.new("TextButton")
+speedTab.Size = UDim2.new(0.24, 0, 1, 0)
+speedTab.Position = UDim2.new(0.25, 0, 0, 0)
+speedTab.BackgroundColor3 = Color3.fromRGB(80, 80, 150)
+speedTab.BackgroundTransparency = 0.7
+speedTab.Text = "⚡ السرعة"
+speedTab.Font = Enum.Font.GothamBold
+speedTab.TextSize = 14
+speedTab.ZIndex = 7
+speedTab.Parent = tabsFrame
+
+local jumpTab = Instance.new("TextButton")
+jumpTab.Size = UDim2.new(0.24, 0, 1, 0)
+jumpTab.Position = UDim2.new(0.5, 0, 0, 0)
+jumpTab.BackgroundColor3 = Color3.fromRGB(80, 80, 150)
+jumpTab.BackgroundTransparency = 0.7
+jumpTab.Text = "🦘 النط"
+jumpTab.Font = Enum.Font.GothamBold
+jumpTab.TextSize = 14
+jumpTab.ZIndex = 7
+jumpTab.Parent = tabsFrame
+
+local effectsTab = Instance.new("TextButton")
+effectsTab.Size = UDim2.new(0.24, 0, 1, 0)
+effectsTab.Position = UDim2.new(0.75, 0, 0, 0)
+effectsTab.BackgroundColor3 = Color3.fromRGB(80, 80, 150)
+effectsTab.BackgroundTransparency = 0.7
+effectsTab.Text = "🌀 التأثيرات"
+effectsTab.Font = Enum.Font.GothamBold
+effectsTab.TextSize = 14
+effectsTab.ZIndex = 7
+effectsTab.Parent = tabsFrame
+
+-- ============ محتوى النقل ============
+local teleportContent = Instance.new("ScrollingFrame")
+teleportContent.Size = UDim2.new(0.9, 0, 0, 450)
+teleportContent.Position = UDim2.new(0.05, 0, 0, 110)
+teleportContent.BackgroundTransparency = 1
+teleportContent.Visible = true
+teleportContent.ZIndex = 6
+teleportContent.Parent = controlPanel
+
+-- قائمة اللاعبين
+local playerListFrame = Instance.new("ScrollingFrame")
+playerListFrame.Name = "PlayerList"
+playerListFrame.Size = UDim2.new(1, 0, 0, 250)
+playerListFrame.BackgroundColor3 = Color3.fromRGB(10, 25, 50)
+playerListFrame.BackgroundTransparency = 0.9
+playerListFrame.ScrollBarThickness = 6
+playerListFrame.ZIndex = 6
+playerListFrame.Parent = teleportContent
+
+local selectedPlayerText = Instance.new("TextLabel")
+selectedPlayerText.Size = UDim2.new(1, 0, 0, 30)
+selectedPlayerText.Position = UDim2.new(0, 0, 0, 260)
+selectedPlayerText.BackgroundTransparency = 1
+selectedPlayerText.Text = "👤 اختر لاعباً للنقل"
+selectedPlayerText.TextColor3 = Color3.fromRGB(255, 255, 200)
+selectedPlayerText.Font = Enum.Font.GothamBold
+selectedPlayerText.TextSize = 14
+selectedPlayerText.ZIndex = 7
+selectedPlayerText.Parent = teleportContent
+
+-- أزرار النقل
+local teleportButton = Instance.new("TextButton")
+teleportButton.Size = UDim2.new(0.48, 0, 0, 40)
+teleportButton.Position = UDim2.new(0, 0, 0, 300)
+teleportButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+teleportButton.BackgroundTransparency = 0.7
+teleportButton.Text = "🚀 نقل"
+teleportButton.Font = Enum.Font.GothamBold
+teleportButton.TextSize = 14
+teleportButton.ZIndex = 7
+teleportButton.Parent = teleportContent
+
+local refreshButton = Instance.new("TextButton")
+refreshButton.Size = UDim2.new(0.48, 0, 0, 40)
+refreshButton.Position = UDim2.new(0.52, 0, 0, 300)
+refreshButton.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+refreshButton.BackgroundTransparency = 0.7
+refreshButton.Text = "🔄 تحديث"
+refreshButton.Font = Enum.Font.GothamBold
+refreshButton.TextSize = 14
+refreshButton.ZIndex = 7
+refreshButton.Parent = teleportContent
+
+-- ============ محتوى السرعة ============
+local speedContent = Instance.new("ScrollingFrame")
+speedContent.Size = UDim2.new(0.9, 0, 0, 450)
+speedContent.Position = UDim2.new(0.05, 0, 0, 110)
+speedContent.BackgroundTransparency = 1
+speedContent.Visible = false
+speedContent.ZIndex = 6
+speedContent.Parent = controlPanel
+
+-- عداد السرعة
+local speedMeterFrame = Instance.new("Frame")
+speedMeterFrame.Size = UDim2.new(1, 0, 0, 100)
+speedMeterFrame.BackgroundColor3 = Color3.fromRGB(20, 35, 65)
+speedMeterFrame.BackgroundTransparency = 0.9
+speedMeterFrame.ZIndex = 6
+speedMeterFrame.Parent = speedContent
+
+local speedText = Instance.new("TextLabel")
+speedText.Size = UDim2.new(1, 0, 0, 40)
+speedText.BackgroundTransparency = 1
+speedText.Text = "⚡ السرعة: 100%"
+speedText.TextColor3 = Color3.fromRGB(255, 255, 200)
+speedText.Font = Enum.Font.GothamBlack
+speedText.TextSize = 20
+speedText.ZIndex = 7
+speedText.Parent = speedMeterFrame
+
+local speedBar = Instance.new("Frame")
+speedBar.Size = UDim2.new(0.9, 0, 0, 20)
+speedBar.Position = UDim2.new(0.05, 0, 0, 50)
+speedBar.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+speedBar.ZIndex = 6
+speedBar.Parent = speedMeterFrame
+
+local speedFill = Instance.new("Frame")
+speedFill.Size = UDim2.new(0.5, 0, 1, 0)
+speedFill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+speedFill.ZIndex = 7
+speedFill.Parent = speedBar
+
+-- قائمة مستويات السرعة
+local speedLevelsFrame = Instance.new("ScrollingFrame")
+speedLevelsFrame.Size = UDim2.new(1, 0, 0, 180)
+speedLevelsFrame.Position = UDim2.new(0, 0, 0, 110)
+speedLevelsFrame.BackgroundColor3 = Color3.fromRGB(20, 35, 65)
+speedLevelsFrame.BackgroundTransparency = 0.9
+sp
